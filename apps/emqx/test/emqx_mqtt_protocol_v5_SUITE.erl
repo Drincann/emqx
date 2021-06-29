@@ -469,6 +469,38 @@ t_persistent_session_process_dies_session_expires(_) ->
     ?assertEqual(0, client_info(session_present, Client2)),
     emqtt:disconnect(Client2).
 
+t_persistent_session_clean_start_drops_subscriptions(_) ->
+    Topic = <<"foo/bar">>,
+    STopic = <<"foo/+">>,
+    Payload = <<"hello">>,
+    ClientId = <<"t_persistent_session_clean_start_drops_subscriptions">>,
+    {ok, Client1} = emqtt:start_link([
+                                        {proto_ver, v5},
+                                        {clientid, ClientId},
+                                        {properties, #{'Session-Expiry-Interval' => 30}},
+                                        {clean_start, true}
+                                    ]),
+    {ok, _} = emqtt:connect(Client1),
+    {ok, _, [0]} = emqtt:subscribe(Client1, STopic, 0),
+    ok = emqtt:disconnect(Client1),
+
+    {ok, Client2} = emqtt:start_link([
+                                        {proto_ver, v5},
+                                        {clientid, ClientId},
+                                        {clean_start, true}
+                                    ]),
+    {ok, _} = emqtt:connect(Client2),
+    ?assertEqual(0, client_info(session_present, Client2)),
+    {ok, _, [0]} = emqtt:subscribe(Client2, STopic, 0),
+
+    {ok, Client3} = emqtt:start_link([{proto_ver, v5}]),
+    {ok, _} = emqtt:connect(Client3),
+    {ok, 2} = emqtt:publish(Client3, Topic, Payload, 2),
+    ok = emqtt:disconnect(Client3),
+
+    [_Msg1] = receive_messages(1),
+
+    ok = emqtt:disconnect(Client2).
 
 %% [MQTT-3.1.3-9]
 %% !!!REFACTOR NEED:
